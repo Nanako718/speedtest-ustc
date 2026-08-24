@@ -1,0 +1,91 @@
+name: Build
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact: speedtest-linux-amd64
+          - os: macos-latest
+            artifact: speedtest-macos-amd64
+          - os: macos-14
+            artifact: speedtest-macos-arm64
+          - os: windows-latest
+            artifact: speedtest-windows-amd64.exe
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install pyinstaller httpx rich
+
+      - name: Build executable
+        run: >
+          pyinstaller
+          --onefile
+          --name speedtest
+          --add-data "speedtest:speedtest"
+          --hidden-import speedtest.cli
+          --hidden-import speedtest.client
+          --hidden-import speedtest.config
+          --hidden-import speedtest.models
+          --hidden-import speedtest.engine
+          --hidden-import speedtest.pow
+          --hidden-import speedtest.ping
+          --hidden-import speedtest.download
+          --hidden-import speedtest.upload
+          --hidden-import speedtest.ui
+          speedtest/__main__.py
+
+      - name: Rename artifact (Unix)
+        if: runner.os != 'Windows'
+        run: mv dist/speedtest dist/${{ matrix.artifact }}
+
+      - name: Rename artifact (Windows)
+        if: runner.os == 'Windows'
+        run: Move-Item dist/speedtest.exe dist/${{ matrix.artifact }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/${{ matrix.artifact }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Make executable
+        run: chmod +x artifacts/speedtest-linux-amd64/speedtest-linux-amd64
+             artifacts/speedtest-macos-amd64/speedtest-macos-amd64
+             artifacts/speedtest-macos-arm64/speedtest-macos-arm64
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/speedtest-linux-amd64/speedtest-linux-amd64
+            artifacts/speedtest-macos-amd64/speedtest-macos-amd64
+            artifacts/speedtest-macos-arm64/speedtest-macos-arm64
+            artifacts/speedtest-windows-amd64.exe/speedtest-windows-amd64.exe
+          generate_release_notes: true

@@ -4,7 +4,45 @@
 
 ## 安装
 
-### 前置要求
+### 方式一：下载可执行文件（无需 Python）
+
+从 [Releases](https://github.com/yourname/speedtest-ustc/releases/latest) 页面下载对应平台的文件：
+
+| 平台 | 文件名 |
+|------|--------|
+| macOS (Apple Silicon) | `speedtest-macos-arm64` |
+| macOS (Intel) | `speedtest-macos-amd64` |
+| Linux (x86_64) | `speedtest-linux-amd64` |
+| Windows (x86_64) | `speedtest-windows-amd64.exe` |
+
+**macOS / Linux：**
+
+```bash
+# 下载后添加执行权限
+chmod +x speedtest-macos-arm64
+
+# 移动到 PATH 目录（可选）
+sudo mv speedtest-macos-arm64 /usr/local/bin/speedtest
+
+# 运行
+speedtest ustc
+```
+
+**Windows：**
+
+```powershell
+# 直接运行
+.\speedtest-windows-amd64.exe ustc
+
+# 或添加到 PATH 后运行
+speedtest ustc
+```
+
+> macOS 首次运行可能提示"无法验证开发者"，在 系统设置 → 隐私与安全性 中点击"仍要打开"。
+
+### 方式二：pip 安装（需要 Python）
+
+前置要求：
 
 - Python 3.10 或更高版本
 - pip 包管理器
@@ -18,7 +56,7 @@ python --version     # Windows
 
 如果未安装 Python，请从 [python.org](https://www.python.org/downloads/) 下载。
 
-### macOS
+#### macOS
 
 ```bash
 # 方式一：直接安装
@@ -32,7 +70,7 @@ source .venv/bin/activate
 pip install -e .
 ```
 
-### Linux (Ubuntu / Debian / Arch / Fedora)
+#### Linux (Ubuntu / Debian / Arch / Fedora)
 
 ```bash
 # 方式一：直接安装
@@ -52,7 +90,7 @@ pip install -e .
 > sudo dnf install python3-virtualenv # Fedora
 > ```
 
-### Windows
+#### Windows
 
 ```powershell
 # 方式一：直接安装
@@ -68,7 +106,7 @@ pip install -e .
 
 > 如果 `pip` 命令不可用，尝试 `py -m pip install speedtest-ustc`。
 
-### 验证安装
+#### 验证安装
 
 ```bash
 speedtest ustc --simple
