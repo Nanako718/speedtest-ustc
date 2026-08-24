@@ -20,6 +20,39 @@ async def get_ip(client: httpx.AsyncClient) -> str:
     return raw.split(" - ")[0].strip() if " - " in raw else raw
 
 
+async def query_server_location(server_ip: str) -> tuple[str, str]:
+    """Query server IP location via external API. Returns (location, isp)."""
+    try:
+        url = config.IP_QUERY_URL.format(ip=server_ip)
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(
+                url,
+                params={"fields": config.IP_QUERY_FIELDS, "lang": "zh-CN"},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+
+            if data.get("status") != "success":
+                return "", ""
+
+            parts = []
+            country = data.get("country", "")
+            region = data.get("regionName", "")
+            city = data.get("city", "")
+            if country:
+                parts.append(country)
+            if region and region != country:
+                parts.append(region)
+            if city and city != region:
+                parts.append(city)
+
+            location = " · ".join(parts)
+            isp = data.get("isp", "")
+            return location, isp
+    except Exception:
+        return "", ""
+
+
 async def run_test(
     ipv6: bool = False,
     duration: float | None = None,
@@ -33,6 +66,7 @@ async def run_test(
     ul_duration = duration if duration is not None else config.UPLOAD_DURATION
 
     result = TestResult()
+    result.server_ip = config.SERVER_IP
     total_start = time.monotonic()
 
     client = make_client(ipv6=ipv6)
@@ -41,13 +75,21 @@ async def run_test(
         state.phase = "ip"
         await init_session(client, ipv6=ipv6)
 
-        # 1. Get IP
+        # 1. Get IP + Server location (parallel)
         state.phase = "ip"
+        ip_task = asyncio.create_task(get_ip(client))
+        loc_task = asyncio.create_task(query_server_location(config.SERVER_IP))
+
         try:
-            result.ip = await get_ip(client)
+            result.ip = await ip_task
             state.client_ip = result.ip
         except Exception:
             result.ip = "未知"
+
+        try:
+            result.server_location, result.server_isp = await loc_task
+        except Exception:
+            pass
 
         # 2. PoW
         state.phase = "pow"

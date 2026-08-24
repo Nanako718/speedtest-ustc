@@ -28,4 +28,8 @@ AUTO_BONUS_CAP_MS = 400
 
 SERVER_NAME = "中科大"
 SERVER_FULL_NAME = "中国科学技术大学"
+SERVER_IP = "202.38.64.43"
 USER_AGENT = "speedtest-ustc/1.0"
+
+IP_QUERY_URL = "http://ip-api.com/json/{ip}"
+IP_QUERY_FIELDS = "status,country,regionName,city,isp,query"

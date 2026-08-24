@@ -23,6 +23,9 @@ class TestResult:
     server: str = "中科大"
     server_name: str = "中国科学技术大学"
     ip: str = ""
+    server_ip: str = ""
+    server_location: str = ""
+    server_isp: str = ""
     download: float = 0.0
     upload: float = 0.0
     ping: float = 0.0
