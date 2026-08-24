@@ -4,18 +4,83 @@
 
 ## 安装
 
+### 前置要求
+
+- Python 3.10 或更高版本
+- pip 包管理器
+
+检查 Python 版本：
+
 ```bash
-pip install speedtest-ustc
+python3 --version    # macOS / Linux
+python --version     # Windows
 ```
 
-开发模式：
+如果未安装 Python，请从 [python.org](https://www.python.org/downloads/) 下载。
+
+### macOS
 
 ```bash
+# 方式一：直接安装
+pip3 install speedtest-ustc
+
+# 方式二：开发模式
+git clone https://github.com/yourname/speedtest-ustc
+cd speedtest-ustc
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e .
+```
+
+### Linux (Ubuntu / Debian / Arch / Fedora)
+
+```bash
+# 方式一：直接安装
+pip3 install speedtest-ustc
+
+# 方式二：开发模式
+git clone https://github.com/yourname/speedtest-ustc
+cd speedtest-ustc
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e .
+```
+
+> 部分发行版需要先安装 `python3-venv`：
+> ```bash
+> sudo apt install python3-venv      # Ubuntu / Debian
+> sudo dnf install python3-virtualenv # Fedora
+> ```
+
+### Windows
+
+```powershell
+# 方式一：直接安装
+pip install speedtest-ustc
+
+# 方式二：开发模式
 git clone https://github.com/yourname/speedtest-ustc
 cd speedtest-ustc
 python -m venv .venv
-source .venv/bin/activate
+.venv\Scripts\activate
 pip install -e .
+```
+
+> 如果 `pip` 命令不可用，尝试 `py -m pip install speedtest-ustc`。
+
+### 验证安装
+
+```bash
+speedtest ustc --simple
+```
+
+看到类似以下输出即安装成功：
+
+```
+Ping: 37.58 ms
+Jitter: 2.54 ms
+Download: 532.13 Mbps
+Upload: 35.38 Mbps
 ```
 
 ## 使用
