@@ -9,7 +9,10 @@ dependencies = [
 ]
 
 [project.scripts]
-speedtest = "speedtest.cli:main"
+speedtest-ustc = "speedtest.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["speedtest*"]
 
 [build-system]
 requires = ["setuptools>=68.0"]

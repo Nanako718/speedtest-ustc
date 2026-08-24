@@ -14,13 +14,13 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            artifact: speedtest-linux-amd64
+            artifact: speedtest-ustc-linux-amd64
           - os: macos-latest
-            artifact: speedtest-macos-amd64
+            artifact: speedtest-ustc-macos-amd64
           - os: macos-14
-            artifact: speedtest-macos-arm64
+            artifact: speedtest-ustc-macos-arm64
           - os: windows-latest
-            artifact: speedtest-windows-amd64.exe
+            artifact: speedtest-ustc-windows-amd64.exe
 
     runs-on: ${{ matrix.os }}
 
@@ -38,7 +38,7 @@ jobs:
         run: >
           pyinstaller
           --onefile
-          --name speedtest
+          --name speedtest-ustc
           --add-data "speedtest:speedtest"
           --hidden-import speedtest.cli
           --hidden-import speedtest.client
@@ -54,11 +54,11 @@ jobs:
 
       - name: Rename artifact (Unix)
         if: runner.os != 'Windows'
-        run: mv dist/speedtest dist/${{ matrix.artifact }}
+        run: mv dist/speedtest-ustc dist/${{ matrix.artifact }}
 
       - name: Rename artifact (Windows)
         if: runner.os == 'Windows'
-        run: Move-Item dist/speedtest.exe dist/${{ matrix.artifact }}
+        run: Move-Item dist/speedtest-ustc.exe dist/${{ matrix.artifact }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -77,9 +77,9 @@ jobs:
 
       - name: Make executable
         run: |
-          chmod +x artifacts/speedtest-linux-amd64/speedtest-linux-amd64
-          chmod +x artifacts/speedtest-macos-amd64/speedtest-macos-amd64
-          chmod +x artifacts/speedtest-macos-arm64/speedtest-macos-arm64
+          chmod +x artifacts/speedtest-ustc-linux-amd64/speedtest-ustc-linux-amd64
+          chmod +x artifacts/speedtest-ustc-macos-amd64/speedtest-ustc-macos-amd64
+          chmod +x artifacts/speedtest-ustc-macos-arm64/speedtest-ustc-macos-arm64
 
       - name: Create release
         uses: softprops/action-gh-release@v2
@@ -87,8 +87,8 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: ${{ github.ref_name }}
           files: |
-            artifacts/speedtest-linux-amd64/speedtest-linux-amd64
-            artifacts/speedtest-macos-amd64/speedtest-macos-amd64
-            artifacts/speedtest-macos-arm64/speedtest-macos-arm64
-            artifacts/speedtest-windows-amd64.exe/speedtest-windows-amd64.exe
+            artifacts/speedtest-ustc-linux-amd64/speedtest-ustc-linux-amd64
+            artifacts/speedtest-ustc-macos-amd64/speedtest-ustc-macos-amd64
+            artifacts/speedtest-ustc-macos-arm64/speedtest-ustc-macos-arm64
+            artifacts/speedtest-ustc-windows-amd64.exe/speedtest-ustc-windows-amd64.exe
           generate_release_notes: true
