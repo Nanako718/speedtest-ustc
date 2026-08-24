@@ -139,6 +139,10 @@ def _build_live_table(
         f"[dim]测速时间[/] {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
         f"[dim]耗时[/]     {state.elapsed_seconds:.1f}s",
     )
+    info.add_row(
+        f"[dim]测试类型[/] {state.ip_version}",
+        "",
+    )
 
     # Show server info as soon as data is available
     if state.client_ip or state.server_ip:
@@ -178,6 +182,7 @@ def _build_result_panel(
     result: TestResult,
     dl_progress: Progress,
     ul_progress: Progress,
+    state: SpeedTestState,
 ) -> Panel:
     dl_speed = result.download
     ul_speed = result.upload
@@ -226,6 +231,10 @@ def _build_result_panel(
         f"[dim]耗时[/]     {result.duration:.2f}s",
     )
     info.add_row(
+        f"[dim]测试类型[/] {state.ip_version}",
+        "",
+    )
+    info.add_row(
         f"[dim]本机IP[/]   {result.ip or '未知'}",
         f"[dim]机房IP[/]   {ip_str}",
     )
@@ -262,4 +271,4 @@ def render_live(state: SpeedTestState) -> Panel:
 def render_result(result: TestResult, state: SpeedTestState) -> Panel:
     dl_progress = _make_dl_progress()
     ul_progress = _make_ul_progress()
-    return _build_result_panel(result, dl_progress, ul_progress)
+    return _build_result_panel(result, dl_progress, ul_progress, state)

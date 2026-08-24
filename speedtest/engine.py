@@ -79,6 +79,7 @@ async def run_test(
     ul_duration = duration if duration is not None else config.UPLOAD_DURATION
 
     result = TestResult()
+    state.ip_version = "IPv6" if ipv6 else "IPv4"
     total_start = time.monotonic()
 
     client = make_client(ipv6=ipv6)

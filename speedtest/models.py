@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 @dataclass
 class SpeedTestState:
     phase: str = "idle"
+    ip_version: str = "IPv4"
     client_ip: str = ""
     server_ip: str = ""
     server_location: str = ""
