@@ -5,6 +5,9 @@ from dataclasses import dataclass, field
 class SpeedTestState:
     phase: str = "idle"
     client_ip: str = ""
+    server_ip: str = ""
+    server_location: str = ""
+    server_isp: str = ""
     ping_ms: float = 0.0
     jitter_ms: float = 0.0
     dl_speed_mbps: float = 0.0

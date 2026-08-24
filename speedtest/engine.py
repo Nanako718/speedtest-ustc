@@ -1,4 +1,5 @@
 import asyncio
+import re
 import time
 
 import httpx
@@ -18,6 +19,18 @@ async def get_ip(client: httpx.AsyncClient) -> str:
     data = resp.json()
     raw = data.get("processedString", "")
     return raw.split(" - ")[0].strip() if " - " in raw else raw
+
+
+async def get_server_ip(client: httpx.AsyncClient) -> str:
+    """Get the actual USTC server IP from the result page."""
+    try:
+        resp = await client.get(f"{config.USTC_ORIGIN}/results/result.php")
+        match = re.search(r"访问的服务器IP是[:：]\s*(\d+\.\d+\.\d+\.\d+)", resp.text)
+        if match:
+            return match.group(1)
+        return "未知"
+    except Exception:
+        return "未知"
 
 
 async def query_server_location(server_ip: str) -> tuple[str, str]:
@@ -66,7 +79,6 @@ async def run_test(
     ul_duration = duration if duration is not None else config.UPLOAD_DURATION
 
     result = TestResult()
-    result.server_ip = config.SERVER_IP
     total_start = time.monotonic()
 
     client = make_client(ipv6=ipv6)
@@ -75,10 +87,10 @@ async def run_test(
         state.phase = "ip"
         await init_session(client, ipv6=ipv6)
 
-        # 1. Get IP + Server location (parallel)
+        # 1. Get client IP + server IP (parallel)
         state.phase = "ip"
         ip_task = asyncio.create_task(get_ip(client))
-        loc_task = asyncio.create_task(query_server_location(config.SERVER_IP))
+        server_ip_task = asyncio.create_task(get_server_ip(client))
 
         try:
             result.ip = await ip_task
@@ -87,21 +99,32 @@ async def run_test(
             result.ip = "未知"
 
         try:
+            result.server_ip = await server_ip_task
+            state.server_ip = result.server_ip
+        except Exception:
+            result.server_ip = "未知"
+
+        # 2. Query server location
+        loc_task = asyncio.create_task(query_server_location(result.server_ip))
+
+        try:
             result.server_location, result.server_isp = await loc_task
+            state.server_location = result.server_location
+            state.server_isp = result.server_isp
         except Exception:
             pass
 
-        # 2. PoW
+        # 3. PoW
         state.phase = "pow"
         await solve_pow(client)
 
-        # 3. Ping
+        # 4. Ping
         result.ping, result.jitter = await measure_ping(client, state, ping_count)
 
-        # 4. Download
+        # 5. Download
         result.download = await run_download(client, state, dl_duration)
 
-        # 5. Upload
+        # 6. Upload
         result.upload = await run_upload(client, state, ul_duration)
 
     finally:

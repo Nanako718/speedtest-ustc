@@ -138,6 +138,18 @@ def _build_live_table(
         f"[dim]耗时[/]     {state.elapsed_seconds:.1f}s",
     )
 
+    # Show server info as soon as data is available
+    if state.client_ip or state.server_ip:
+        info.add_row(
+            f"[dim]本机IP[/]   {state.client_ip or '...'}",
+            f"[dim]机房IP[/]   {state.server_ip or '...'}",
+        )
+    if state.server_location or state.server_isp:
+        info.add_row(
+            f"[dim]位置[/]     {state.server_location or '...'}",
+            f"[dim]ISP[/]      {state.server_isp or '...'}",
+        )
+
     body = Table(show_header=False, box=None, padding=0, expand=True)
     body.add_column(ratio=1)
     body.add_row(header)
