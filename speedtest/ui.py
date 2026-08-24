@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from rich.console import Console
 from rich.panel import Panel
 from rich.progress import BarColumn, Progress, TextColumn
@@ -134,7 +136,7 @@ def _build_live_table(
     info.add_column(ratio=1)
     info.add_column(ratio=1)
     info.add_row(
-        "[dim]丢包率[/]   0.00%",
+        f"[dim]测速时间[/] {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
         f"[dim]耗时[/]     {state.elapsed_seconds:.1f}s",
     )
 
@@ -220,7 +222,7 @@ def _build_result_panel(
     info.add_column(ratio=1)
     info.add_column(ratio=1)
     info.add_row(
-        "[dim]丢包率[/]   0.00%",
+        f"[dim]测速时间[/] {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
         f"[dim]耗时[/]     {result.duration:.2f}s",
     )
     info.add_row(
