@@ -277,6 +277,41 @@ python -m pytest tests/ -v
 python -m speedtest ustc
 ```
 
+## 发布
+
+项目使用 GitHub Actions 自动构建和发布。每次推送 `v*` 标签时，自动构建四个平台的可执行文件并发布到 Releases。
+
+### 发布流程
+
+```bash
+# 1. 修改版本号（pyproject.toml 和 speedtest/__init__.py）
+
+# 2. 提交
+git add -A
+git commit -m "release: v1.1.0"
+
+# 3. 打标签
+git tag v1.1.0
+
+# 4. 推送（触发自动构建）
+git push origin main --tags
+```
+
+GitHub Actions 会自动：
+
+1. 在 macOS (ARM64 + AMD64)、Linux (AMD64)、Windows (AMD64) 上构建
+2. 使用 PyInstaller 打包为独立可执行文件
+3. 创建 GitHub Release 并上传四个平台的产物
+
+### 构建产物
+
+| 平台 | 产物 |
+|------|------|
+| macOS (Apple Silicon) | `speedtest-macos-arm64` |
+| macOS (Intel) | `speedtest-macos-amd64` |
+| Linux (x86_64) | `speedtest-linux-amd64` |
+| Windows (x86_64) | `speedtest-windows-amd64.exe` |
+
 ## License
 
 MIT

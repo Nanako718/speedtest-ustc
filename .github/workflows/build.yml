@@ -1,4 +1,4 @@
-name: Build
+name: Build & Release
 
 on:
   push:
@@ -76,13 +76,16 @@ jobs:
           path: artifacts
 
       - name: Make executable
-        run: chmod +x artifacts/speedtest-linux-amd64/speedtest-linux-amd64
-             artifacts/speedtest-macos-amd64/speedtest-macos-amd64
-             artifacts/speedtest-macos-arm64/speedtest-macos-arm64
+        run: |
+          chmod +x artifacts/speedtest-linux-amd64/speedtest-linux-amd64
+          chmod +x artifacts/speedtest-macos-amd64/speedtest-macos-amd64
+          chmod +x artifacts/speedtest-macos-arm64/speedtest-macos-arm64
 
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
           files: |
             artifacts/speedtest-linux-amd64/speedtest-linux-amd64
             artifacts/speedtest-macos-amd64/speedtest-macos-amd64
