@@ -8,33 +8,40 @@
 
 从 [Releases](https://github.com/yourname/speedtest-ustc/releases/latest) 页面下载对应平台的文件：
 
-| 平台 | 文件名 |
-|------|--------|
+| 平台 | 下载文件 |
+|------|----------|
 | macOS (Apple Silicon) | `speedtest-macos-arm64` |
 | macOS (Intel) | `speedtest-macos-amd64` |
 | Linux (x86_64) | `speedtest-linux-amd64` |
 | Windows (x86_64) | `speedtest-windows-amd64.exe` |
 
-**macOS / Linux：**
+#### macOS / Linux
+
+下载后执行以下命令即可在任意目录使用 `speedtest ustc`：
 
 ```bash
-# 下载后添加执行权限
+# 添加执行权限
 chmod +x speedtest-macos-arm64
 
-# 移动到 PATH 目录（可选）
+# 移动到系统目录，重命名为 speedtest
 sudo mv speedtest-macos-arm64 /usr/local/bin/speedtest
+```
 
-# 运行
+验证：
+
+```bash
 speedtest ustc
 ```
 
-**Windows：**
+#### Windows
+
+1. 下载 `speedtest-windows-amd64.exe`
+2. 重命名为 `speedtest.exe`
+3. 移动到 `C:\Windows\System32\` 或任意 PATH 目录
+
+验证：
 
 ```powershell
-# 直接运行
-.\speedtest-windows-amd64.exe ustc
-
-# 或添加到 PATH 后运行
 speedtest ustc
 ```
 
