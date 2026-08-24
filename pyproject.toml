@@ -1,0 +1,16 @@
+[project]
+name = "speedtest-ustc"
+version = "1.0.0"
+description = "USTC network speedtest CLI tool"
+requires-python = ">=3.10"
+dependencies = [
+    "httpx",
+    "rich",
+]
+
+[project.scripts]
+speedtest = "speedtest.cli:main"
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
