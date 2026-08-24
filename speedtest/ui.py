@@ -200,6 +200,10 @@ def _build_result_panel(
         speed=f"{ul_speed:.0f} Mbps",
     )
 
+    location_str = result.server_location or "未知"
+    isp_str = result.server_isp or ""
+    ip_str = result.server_ip or ""
+
     info = Table(show_header=False, box=None, padding=(0, 1), expand=True)
     info.add_column(ratio=1)
     info.add_column(ratio=1)
@@ -207,22 +211,12 @@ def _build_result_panel(
         "[dim]丢包率[/]   0.00%",
         f"[dim]耗时[/]     {result.duration:.2f}s",
     )
-
-    # Server info
-    server_info = Table(show_header=False, box=None, padding=(0, 1), expand=True)
-    server_info.add_column(ratio=1)
-    server_info.add_column(ratio=1)
-
-    location_str = result.server_location or "未知"
-    isp_str = result.server_isp or ""
-    ip_str = result.server_ip or ""
-
-    server_info.add_row(
-        f"[dim]服务器[/]   {config.SERVER_NAME}",
-        f"[dim]IP[/]       {ip_str}",
+    info.add_row(
+        f"[dim]本机IP[/]   {result.ip or '未知'}",
+        f"[dim]机房IP[/]   {ip_str}",
     )
     if location_str != "未知" or isp_str:
-        server_info.add_row(
+        info.add_row(
             f"[dim]位置[/]     {location_str}",
             f"[dim]ISP[/]      {isp_str}",
         )
@@ -236,8 +230,6 @@ def _build_result_panel(
     body.add_row(ul_progress)
     body.add_row(Text(""))
     body.add_row(info)
-    body.add_row(Text(""))
-    body.add_row(server_info)
 
     return Panel(
         body,
