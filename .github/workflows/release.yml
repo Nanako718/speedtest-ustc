@@ -32,7 +32,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install pyinstaller httpx rich
+        run: pip install pyinstaller httpx rich plotext
 
       - name: Build executable
         run: >
@@ -50,6 +50,15 @@ jobs:
           --hidden-import speedtest.download
           --hidden-import speedtest.upload
           --hidden-import speedtest.ui
+          --hidden-import speedtest.history
+          --collect-all httpx
+          --collect-all rich
+          --collect-all plotext
+          --collect-all anyio
+          --collect-all httpcore
+          --collect-all h11
+          --collect-all certifi
+          --collect-all idna
           speedtest/__main__.py
 
       - name: Rename artifact (Unix)
