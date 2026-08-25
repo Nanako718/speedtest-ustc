@@ -1,274 +1,433 @@
-from datetime import datetime
+from __future__ import annotations
 
-from rich.console import Console
+import time
+from collections import deque
+
+from rich import box
+from rich.align import Align
+from rich.console import Console, Group
 from rich.panel import Panel
-from rich.progress import BarColumn, Progress, TextColumn
 from rich.table import Table
 from rich.text import Text
 
-from speedtest import config
 from speedtest.models import SpeedTestState, TestResult
 
 
-def format_bytes(n: int) -> str:
-    if n >= 1_073_741_824:
-        return f"{n / 1_073_741_824:.2f} GB"
-    if n >= 1_048_576:
-        return f"{n / 1_048_576:.2f} MB"
-    if n >= 1024:
-        return f"{n / 1024:.2f} KB"
-    return f"{n} B"
+# ============================================================
+# 基础配置
+# ============================================================
+
+console = Console()
+
+MAX_POINTS = 60
+
+DOWNLOAD_COLOR = "blue"
+UPLOAD_COLOR = "green"
+
+DOWNLOAD_HEX = "#2997FF"
+UPLOAD_HEX = "#30D158"
+TEXT_COLOR = "#E5E5EA"
+SECONDARY_COLOR = "#8E8E93"
 
 
-def mbps_to_mbs(mbps: float) -> float:
-    return mbps / 8
+# ============================================================
+# 数据模型
+# ============================================================
+
+class SpeedData:
+    def __init__(self, max_points: int = MAX_POINTS):
+        self.max_points = max_points
+        self.timestamps: deque[float] = deque(maxlen=max_points)
+        self.download: deque[float] = deque(maxlen=max_points)
+        self.upload: deque[float] = deque(maxlen=max_points)
+
+    def add(self, timestamp: float, download: float, upload: float):
+        self.timestamps.append(timestamp)
+        self.download.append(download)
+        self.upload.append(upload)
+
+    @property
+    def latest_download(self) -> float:
+        return self.download[-1] if self.download else 0.0
+
+    @property
+    def latest_upload(self) -> float:
+        return self.upload[-1] if self.upload else 0.0
+
+    @property
+    def peak_download(self) -> float:
+        return max(self.download) if self.download else 0.0
+
+    @property
+    def peak_upload(self) -> float:
+        return max(self.upload) if self.upload else 0.0
+
+    @property
+    def elapsed(self) -> float:
+        return self.timestamps[-1] if self.timestamps else 0.0
+
+    def clear(self):
+        self.timestamps.clear()
+        self.download.clear()
+        self.upload.clear()
 
 
-def _make_dl_progress() -> Progress:
-    return Progress(
-        TextColumn("[bold cyan]{task.description:<4}"),
-        BarColumn(bar_width=68, style="cyan", finished_style="cyan"),
-        TextColumn("{task.fields[speed]:>10}"),
-        console=Console(stderr=True),
-        transient=True,
-    )
+# ============================================================
+# 顶部标题
+# ============================================================
+
+def build_header(phase: str = "idle") -> Panel:
+    table = Table.grid(expand=True, padding=(0, 1))
+    table.add_column(justify="left", ratio=1)
+    table.add_column(justify="right")
+
+    title = Text()
+    title.append("◉ ", style=f"bold {DOWNLOAD_HEX}")
+    title.append("USTC SpeedTest", style="bold white")
+    title.append("  网络测速", style=f"dim {TEXT_COLOR}")
+
+    if phase in ("ip", "pow"):
+        status = Text("正在连接测速服务器...", style="dim")
+    elif phase == "ping":
+        status = Text("正在测延迟...", style="bold #BF5AF2")
+    elif phase == "download":
+        status = Text("正在下载...", style="bold #2997FF")
+    elif phase == "upload":
+        status = Text("正在上传...", style="bold #30D158")
+    elif phase == "done":
+        status = Text("测速完成", style="bold #30D158")
+    else:
+        status = Text(time.strftime("%Y-%m-%d %H:%M:%S"), style=f"dim {TEXT_COLOR}")
+
+    table.add_row(title, status)
+
+    return Panel(table, border_style="grey30", box=box.ROUNDED, padding=(0, 1))
 
 
-def _make_ul_progress() -> Progress:
-    return Progress(
-        TextColumn("[bold red]{task.description:<4}"),
-        BarColumn(bar_width=68, style="red", finished_style="red"),
-        TextColumn("{task.fields[speed]:>10}"),
-        console=Console(stderr=True),
-        transient=True,
-    )
+# ============================================================
+# 速度卡片
+# ============================================================
 
-
-def _build_live_table(
-    state: SpeedTestState,
-    dl_progress: Progress,
-    ul_progress: Progress,
+def build_speed_panel(
+    title: str, value: float, peak: float, color: str, icon: str
 ) -> Panel:
-    dl_speed = state.dl_speed_mbps
-    ul_speed = state.ul_speed_mbps
-    dl_mbs = mbps_to_mbs(dl_speed)
-    ul_mbs = mbps_to_mbs(ul_speed)
-    ping = state.ping_ms
-    jitter = state.jitter_ms
-    dl_prog = state.dl_progress
-    ul_prog = state.ul_progress
-    phase = state.phase
+    table = Table.grid(expand=True)
+    table.add_column()
 
-    if phase in ("ping", "download", "upload", "done") and ping > 0:
-        ping_str = f"{ping:.2f} ms"
+    title_text = Text()
+    title_text.append(icon + " ", style=f"bold {color}")
+    title_text.append(title, style="bold white")
+
+    speed_text = Text()
+    speed_text.append(f"{value:,.2f}", style=f"bold {color}")
+    speed_text.append(" Mbps", style=f"{color}")
+
+    peak_text = Text()
+    peak_text.append("峰值  ", style="dim")
+    peak_text.append(f"{peak:,.2f} Mbps", style=f"dim {color}")
+
+    table.add_row(title_text)
+    table.add_row("")
+    table.add_row(Align(speed_text, align="left"))
+    table.add_row("")
+    table.add_row(peak_text)
+
+    return Panel(table, border_style=color, box=box.ROUNDED, padding=(0, 2))
+
+
+# ============================================================
+# 网络指标
+# ============================================================
+
+def build_metrics(
+    latency: float = 0.0,
+    jitter: float = 0.0,
+    packet_loss: float = 0.0,
+    phase: str = "idle",
+) -> Panel:
+    table = Table.grid(expand=True, padding=(0, 2))
+    table.add_column()
+
+    if phase in ("ping", "download", "upload", "done") and latency > 0:
+        latency_str = f"{latency:.2f} ms"
+    else:
+        latency_str = "-- ms"
+
+    if phase in ("ping", "download", "upload", "done") and jitter > 0:
         jitter_str = f"{jitter:.2f} ms"
     else:
-        ping_str = "-- ms"
         jitter_str = "-- ms"
 
-    if phase in ("download", "upload", "done"):
-        dl_speed_str = f"{dl_speed:.2f} Mbps"
-        dl_mbs_str = f"{dl_mbs:.2f} MB/s"
-    else:
-        dl_speed_str = "-- Mbps"
-        dl_mbs_str = "-- MB/s"
+    latency_text = Text()
+    latency_text.append("延迟  ", style="dim")
+    latency_text.append(latency_str, style="bold #BF5AF2")
 
-    if phase in ("upload", "done"):
-        ul_speed_str = f"{ul_speed:.2f} Mbps"
-        ul_mbs_str = f"{ul_mbs:.2f} MB/s"
-    else:
-        ul_speed_str = "-- Mbps"
-        ul_mbs_str = "-- MB/s"
+    jitter_text = Text()
+    jitter_text.append("抖动  ", style="dim")
+    jitter_text.append(jitter_str, style="bold #FFD60A")
 
-    ping_speed_str = f"[green]{ping_str}[/]" if ping_str != "-- ms" else ping_str
-    jitter_speed_str = f"[orange1]{jitter_str}[/]" if jitter_str != "-- ms" else jitter_str
+    loss_text = Text()
+    loss_text.append("丢包率  ", style="dim")
+    loss_text.append(f"{packet_loss:.2f} %", style="bold #FF453A")
 
-    header = Table(show_header=True, box=None, padding=(0, 2), expand=True)
-    header.add_column("下载速度", justify="center", style="bold cyan", ratio=1)
-    header.add_column("上传速度", justify="center", style="bold red", ratio=1)
-    header.add_column("网络延迟", justify="center", style="bold white", ratio=1)
-    header.add_row(
-        Text.from_markup(f"[cyan]{dl_speed_str}[/]"),
-        Text.from_markup(f"[red]{ul_speed_str}[/]"),
-        Text.from_markup(ping_speed_str),
-    )
-    header.add_row(
-        Text.from_markup(f"[cyan]{dl_mbs_str}[/]"),
-        Text.from_markup(f"[red]{ul_mbs_str}[/]"),
-        Text.from_markup(jitter_speed_str),
-    )
+    table.add_row(latency_text)
+    table.add_row("")
+    table.add_row(jitter_text)
+    table.add_row("")
+    table.add_row(loss_text)
 
-    if phase in ("download", "upload", "done"):
-        dl_speed_display = f"{dl_speed:.0f} Mbps"
-    else:
-        dl_speed_display = "-- Mbps"
-
-    if phase == "upload" or phase == "done":
-        ul_speed_display = f"{ul_speed:.0f} Mbps"
-    else:
-        ul_speed_display = "-- Mbps"
-
-    dl_progress.add_task(
-        "下载",
-        total=100,
-        completed=dl_prog * 100,
-        speed=dl_speed_display,
-    )
-    ul_progress.add_task(
-        "上传",
-        total=100,
-        completed=ul_prog * 100,
-        speed=ul_speed_display,
-    )
-
-    if phase == "download":
-        status = f"[cyan]正在下载...[/] [dim]{int(dl_prog * 100)}%[/]"
-    elif phase == "upload":
-        status = f"[red]正在上传...[/] [dim]{int(ul_prog * 100)}%[/]"
-    elif phase == "ping":
-        status = "[dim]正在测延迟...[/]"
-    elif phase in ("ip", "pow"):
-        status = "[dim]正在连接测速服务器...[/]"
-    else:
-        status = ""
-
-    info = Table(show_header=False, box=None, padding=(0, 1), expand=True)
-    info.add_column(ratio=1)
-    info.add_column(ratio=1)
-    info.add_row(
-        f"[dim]测速时间[/] {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-        f"[dim]耗时[/]     {state.elapsed_seconds:.1f}s",
-    )
-    info.add_row(
-        f"[dim]测试类型[/] {state.ip_version}",
-        "",
-    )
-
-    # Show server info as soon as data is available
-    if state.client_ip or state.server_ip:
-        info.add_row(
-            f"[dim]本机IP[/]   {state.client_ip or '...'}",
-            f"[dim]机房IP[/]   {state.server_ip or '...'}",
-        )
-    if state.server_location or state.server_isp:
-        info.add_row(
-            f"[dim]位置[/]     {state.server_location or '...'}",
-            f"[dim]ISP[/]      {state.server_isp or '...'}",
-        )
-
-    body = Table(show_header=False, box=None, padding=0, expand=True)
-    body.add_column(ratio=1)
-    body.add_row(header)
-    body.add_row(Text(""))
-    body.add_row(dl_progress)
-    body.add_row(Text(""))
-    body.add_row(ul_progress)
-    body.add_row(Text(""))
-    body.add_row(info)
-
-    if status:
-        body.add_row(Text(""))
-        body.add_row(Text.from_markup(status))
-
-    return Panel(
-        body,
-        title="[bold]网络测速[/]",
-        border_style="blue",
-        width=90,
-    )
+    return Panel(table, border_style="orange1", box=box.ROUNDED, padding=(0, 1))
 
 
-def _build_result_panel(
-    result: TestResult,
-    dl_progress: Progress,
-    ul_progress: Progress,
-    state: SpeedTestState,
+# ============================================================
+# 底部状态 + 网络信息（同一个面板）
+# ============================================================
+
+def build_footer(
+    data: SpeedData,
+    server_name: str = "中国科学技术大学",
+    client_ip: str = "",
+    server_ip: str = "",
+    server_location: str = "",
+    server_isp: str = "",
+    ip_version: str = "IPv4",
+    phase: str = "idle",
 ) -> Panel:
-    dl_speed = result.download
-    ul_speed = result.upload
-    dl_mbs = mbps_to_mbs(dl_speed)
-    ul_mbs = mbps_to_mbs(ul_speed)
-    ping = result.ping
-    jitter = result.jitter
+    table = Table.grid(expand=True, padding=(0, 2))
+    table.add_column()
+    table.add_column()
+    table.add_column()
+    table.add_column()
 
-    header = Table(show_header=True, box=None, padding=(0, 2), expand=True)
-    header.add_column("下载速度", justify="center", style="bold cyan", ratio=1)
-    header.add_column("上传速度", justify="center", style="bold red", ratio=1)
-    header.add_column("网络延迟", justify="center", style="bold white", ratio=1)
-    header.add_row(
-        Text.from_markup(f"[cyan]{dl_speed:.2f} Mbps[/]"),
-        Text.from_markup(f"[red]{ul_speed:.2f} Mbps[/]"),
-        Text.from_markup(f"[green]{ping:.2f} ms[/]"),
-    )
-    header.add_row(
-        Text.from_markup(f"[cyan]{dl_mbs:.2f} MB/s[/]"),
-        Text.from_markup(f"[red]{ul_mbs:.2f} MB/s[/]"),
-        Text.from_markup(f"[orange1]{jitter:.2f} ms[/]"),
+    duration = data.elapsed
+
+    server = Text()
+    server.append("测速服务器\n", style="dim")
+    server.append(server_name, style="white")
+
+    duration_text = Text()
+    duration_text.append("测试时长\n", style="dim")
+    duration_text.append(time.strftime("%H:%M:%S", time.gmtime(duration)), style="white")
+
+    ver = Text()
+    ver.append("测试类型\n", style="dim")
+    ver.append(ip_version, style="white")
+
+    isp = Text()
+    isp.append("ISP\n", style="dim")
+    isp.append(server_isp or "...", style="white")
+
+    table.add_row(server, duration_text, ver, isp)
+
+    ip = Text()
+    ip.append("本机IP\n", style="dim")
+    ip.append(client_ip or "...", style="white")
+
+    srv_ip = Text()
+    srv_ip.append("机房IP\n", style="dim")
+    srv_ip.append(server_ip or "...", style="white")
+
+    loc = Text()
+    loc.append("位置\n", style="dim")
+    loc.append(server_location or "...", style="white")
+
+    table.add_row(ip, srv_ip, loc, Text(""))
+
+    return Panel(table, border_style="grey30", box=box.ROUNDED, padding=(1, 1))
+
+
+# ============================================================
+# 进度条
+# ============================================================
+
+def build_progress(
+    dl_progress: float = 0.0,
+    ul_progress: float = 0.0,
+    phase: str = "idle",
+) -> Panel:
+    bar_width = 72
+
+    def _bar(progress: float, color: str, label: str) -> Text:
+        filled = int(progress * bar_width)
+        filled = min(filled, bar_width)
+
+        text = Text()
+        text.append(f"{label}  ", style="bold white")
+        if filled > 0:
+            text.append("━" * filled, style=f"bold {color}")
+        if filled < bar_width:
+            text.append("╸", style=f"bold {color}")
+        if filled + 1 < bar_width:
+            text.append("━" * (bar_width - filled - 1), style="dim")
+        pct = int(progress * 100)
+        text.append(f"  {pct:>3}%", style=f"bold {color}")
+        return text
+
+    table = Table.grid(expand=True, padding=(0, 1))
+    table.add_column()
+
+    if phase in ("download", "upload", "done"):
+        table.add_row(_bar(dl_progress, DOWNLOAD_HEX, "下载"))
+        table.add_row("")
+        table.add_row(_bar(ul_progress, UPLOAD_HEX, "上传"))
+    else:
+        table.add_row(_bar(0, DOWNLOAD_HEX, "下载"))
+        table.add_row("")
+        table.add_row(_bar(0, UPLOAD_HEX, "上传"))
+
+    return Panel(table, border_style="grey30", box=box.ROUNDED, padding=(0, 1))
+
+
+# ============================================================
+# 完整 UI
+# ============================================================
+
+def build_ui(
+    data: SpeedData,
+    latency: float = 0.0,
+    jitter: float = 0.0,
+    packet_loss: float = 0.0,
+    phase: str = "idle",
+    server_name: str = "中国科学技术大学",
+    client_ip: str = "",
+    server_ip: str = "",
+    server_location: str = "",
+    server_isp: str = "",
+    ip_version: str = "IPv4",
+    dl_progress: float = 0.0,
+    ul_progress: float = 0.0,
+) -> Group:
+    header = build_header(phase)
+
+    download_panel = build_speed_panel(
+        title="下载速度",
+        value=data.latest_download,
+        peak=data.peak_download,
+        color=DOWNLOAD_HEX,
+        icon="↓",
     )
 
-    dl_progress.add_task(
-        "下载",
-        total=100,
-        completed=100,
-        speed=f"{dl_speed:.0f} Mbps",
-    )
-    ul_progress.add_task(
-        "上传",
-        total=100,
-        completed=100,
-        speed=f"{ul_speed:.0f} Mbps",
+    upload_panel = build_speed_panel(
+        title="上传速度",
+        value=data.latest_upload,
+        peak=data.peak_upload,
+        color=UPLOAD_HEX,
+        icon="↑",
     )
 
-    location_str = result.server_location or "未知"
-    isp_str = result.server_isp or ""
-    ip_str = result.server_ip or ""
+    metrics = build_metrics(latency, jitter, packet_loss, phase)
 
-    info = Table(show_header=False, box=None, padding=(0, 1), expand=True)
-    info.add_column(ratio=1)
-    info.add_column(ratio=1)
-    info.add_row(
-        f"[dim]测速时间[/] {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-        f"[dim]耗时[/]     {result.duration:.2f}s",
-    )
-    info.add_row(
-        f"[dim]测试类型[/] {state.ip_version}",
-        "",
-    )
-    info.add_row(
-        f"[dim]本机IP[/]   {result.ip or '未知'}",
-        f"[dim]机房IP[/]   {ip_str}",
-    )
-    if location_str != "未知" or isp_str:
-        info.add_row(
-            f"[dim]位置[/]     {location_str}",
-            f"[dim]ISP[/]      {isp_str}",
-        )
+    speed_table = Table.grid(expand=True)
+    speed_table.add_column(ratio=1)
+    speed_table.add_column(ratio=1)
+    speed_table.add_column(ratio=1)
+    speed_table.add_row(download_panel, upload_panel, metrics)
 
-    body = Table(show_header=False, box=None, padding=0, expand=True)
-    body.add_column(ratio=1)
-    body.add_row(header)
-    body.add_row(Text(""))
-    body.add_row(dl_progress)
-    body.add_row(Text(""))
-    body.add_row(ul_progress)
-    body.add_row(Text(""))
-    body.add_row(info)
-
-    return Panel(
-        body,
-        title="[bold green]\u2713 TEST COMPLETE[/]",
-        border_style="green",
-        width=90,
+    footer = build_footer(
+        data,
+        server_name=server_name,
+        client_ip=client_ip,
+        server_ip=server_ip,
+        server_location=server_location,
+        server_isp=server_isp,
+        ip_version=ip_version,
+        phase=phase,
     )
+
+    progress = build_progress(
+        dl_progress=dl_progress,
+        ul_progress=ul_progress,
+        phase=phase,
+    )
+
+    parts = [header, speed_table, progress, footer]
+
+    return Group(*parts)
+
+
+# ============================================================
+# CLI 桥接：render_live / render_result
+# ============================================================
+
+_live_data: SpeedData | None = None
+_prev_elapsed: float = 0.0
+
+
+def _get_live_data() -> SpeedData:
+    global _live_data
+    if _live_data is None:
+        _live_data = SpeedData()
+    return _live_data
 
 
 def render_live(state: SpeedTestState) -> Panel:
-    dl_progress = _make_dl_progress()
-    ul_progress = _make_ul_progress()
-    return _build_live_table(state, dl_progress, ul_progress)
+    """cli.py 在 Live 循环中反复调用此函数。"""
+    global _prev_elapsed
+
+    data = _get_live_data()
+
+    elapsed = state.elapsed_seconds
+    if elapsed > _prev_elapsed and state.phase in ("download", "upload"):
+        data.add(
+            timestamp=elapsed,
+            download=state.dl_speed_mbps,
+            upload=state.ul_speed_mbps,
+        )
+        _prev_elapsed = elapsed
+
+    return Panel(
+        build_ui(
+            data,
+            latency=state.ping_ms,
+            jitter=state.jitter_ms,
+            phase=state.phase,
+            server_name="中国科学技术大学",
+            client_ip=state.client_ip,
+            server_ip=state.server_ip,
+            server_location=state.server_location,
+            server_isp=state.server_isp,
+            ip_version=state.ip_version,
+            dl_progress=state.dl_progress,
+            ul_progress=state.ul_progress,
+        ),
+        border_style="blue",
+        width=96,
+    )
 
 
 def render_result(result: TestResult, state: SpeedTestState) -> Panel:
-    dl_progress = _make_dl_progress()
-    ul_progress = _make_ul_progress()
-    return _build_result_panel(result, dl_progress, ul_progress, state)
+    """cli.py 测速完成后调用此函数显示最终结果。"""
+    global _live_data, _prev_elapsed
+
+    data = _get_live_data()
+
+    data.add(
+        timestamp=result.duration,
+        download=result.download,
+        upload=result.upload,
+    )
+
+    result_ui = build_ui(
+        data,
+        latency=result.ping,
+        jitter=result.jitter,
+        phase="done",
+        server_name=result.server_name or "中国科学技术大学",
+        client_ip=result.ip,
+        server_ip=result.server_ip,
+        server_location=result.server_location,
+        server_isp=result.server_isp,
+        ip_version=state.ip_version,
+        dl_progress=1.0,
+        ul_progress=1.0,
+    )
+
+    _live_data = None
+    _prev_elapsed = 0.0
+
+    return Panel(
+        result_ui,
+        title="[bold green]\u2713 TEST COMPLETE[/]",
+        border_style="green",
+        width=96,
+    )
