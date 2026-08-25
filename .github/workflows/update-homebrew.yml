@@ -1,44 +1,50 @@
 name: Update Homebrew Tap
 
 on:
-  release:
-    types: [published]
+  workflow_run:
+    workflows: ["Build & Release"]
+    types: [completed]
 
 jobs:
   update-formula:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     steps:
+      - name: Get tag from release
+        id: tag
+        run: |
+          TAG=$(curl -sH "Authorization: token ${{ secrets.HOMEBREW_TAP_TOKEN }}" \
+            "https://api.github.com/repos/Nanako718/speedtest-ustc/releases/latest" \
+            | python3 -c "import sys,json; print(json.load(sys.stdin)['tag_name'])")
+          VERSION="${TAG#v}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
       - uses: actions/checkout@v4
         with:
           repository: Nanako718/homebrew-tap
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           path: homebrew-tap
 
-      - name: Get release info
-        id: release
+      - name: Get binary SHA256
+        id: sha
         run: |
-          TAG="${{ github.event.release.tag_name }}"
-          VERSION="${TAG#v}"
+          TAG="${{ steps.tag.outputs.tag }}"
           BASE_URL="https://github.com/Nanako718/speedtest-ustc/releases/download/${TAG}"
-
           ARM64_SHA=$(curl -sL "${BASE_URL}/speedtest-ustc-macos-arm64" | sha256sum | awk '{print $1}')
           AMD64_SHA=$(curl -sL "${BASE_URL}/speedtest-ustc-macos-amd64" | sha256sum | awk '{print $1}')
-
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "arm64_sha=$ARM64_SHA" >> "$GITHUB_OUTPUT"
-          echo "amd64_sha=$AMD64_SHA" >> "$GITHUB_OUTPUT"
+          echo "arm64=$ARM64_SHA" >> "$GITHUB_OUTPUT"
+          echo "amd64=$AMD64_SHA" >> "$GITHUB_OUTPUT"
 
       - name: Update Formula
         run: |
-          TAG="${{ steps.release.outputs.tag }}"
-          VERSION="${{ steps.release.outputs.version }}"
+          VERSION="${{ steps.tag.outputs.version }}"
+          TAG="${{ steps.tag.outputs.tag }}"
           BASE_URL="https://github.com/Nanako718/speedtest-ustc/releases/download/${TAG}"
-          ARM64_SHA="${{ steps.release.outputs.arm64_sha }}"
-          AMD64_SHA="${{ steps.release.outputs.amd64_sha }}"
-          FORMULA="homebrew-tap/Formula/speedtest-ustc.rb"
+          ARM64_SHA="${{ steps.sha.outputs.arm64 }}"
+          AMD64_SHA="${{ steps.sha.outputs.amd64 }}"
 
-          cat > "$FORMULA" <<EOF
+          cat > homebrew-tap/Formula/speedtest-ustc.rb <<RUBY
           class SpeedtestUstc < Formula
             desc "USTC network speed test CLI"
             homepage "https://github.com/Nanako718/speedtest-ustc"
@@ -64,10 +70,9 @@ jobs:
               assert_match version.to_s, shell_output("#{bin}/speedtest-ustc --version")
             end
           end
-          EOF
+          RUBY
 
-          # 去掉 heredoc 带来的前导空格（YAML 缩进导致）
-          sed -i 's/^          //' "$FORMULA"
+          sed -i 's/^          //' homebrew-tap/Formula/speedtest-ustc.rb
 
       - name: Commit and push
         run: |
@@ -76,5 +81,5 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -A
           git diff --cached --quiet && exit 0
-          git commit -m "Update speedtest-ustc to v${{ steps.release.outputs.version }}"
+          git commit -m "Update speedtest-ustc to v${{ steps.tag.outputs.version }}"
           git push
