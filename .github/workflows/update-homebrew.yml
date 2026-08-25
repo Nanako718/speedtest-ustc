@@ -36,8 +36,9 @@ jobs:
           BASE_URL="https://github.com/Nanako718/speedtest-ustc/releases/download/${TAG}"
           ARM64_SHA="${{ steps.release.outputs.arm64_sha }}"
           AMD64_SHA="${{ steps.release.outputs.amd64_sha }}"
+          FORMULA="homebrew-tap/Formula/speedtest-ustc.rb"
 
-          cat > homebrew-tap/Formula/speedtest-ustc.rb <<RUBY
+          cat > "$FORMULA" <<EOF
           class SpeedtestUstc < Formula
             desc "USTC network speed test CLI"
             homepage "https://github.com/Nanako718/speedtest-ustc"
@@ -63,7 +64,10 @@ jobs:
               assert_match version.to_s, shell_output("#{bin}/speedtest-ustc --version")
             end
           end
-          RUBY
+          EOF
+
+          # 去掉 heredoc 带来的前导空格（YAML 缩进导致）
+          sed -i 's/^          //' "$FORMULA"
 
       - name: Commit and push
         run: |
