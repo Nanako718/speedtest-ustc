@@ -368,7 +368,6 @@ def build_ui(
 # ============================================================
 
 _live_data: SpeedData | None = None
-_prev_elapsed: float = 0.0
 
 
 def _get_live_data() -> SpeedData:
@@ -380,18 +379,14 @@ def _get_live_data() -> SpeedData:
 
 def render_live(state: SpeedTestState) -> Panel:
     """cli.py 在 Live 循环中反复调用此函数。"""
-    global _prev_elapsed
-
     data = _get_live_data()
 
-    elapsed = state.elapsed_seconds
-    if elapsed > _prev_elapsed and state.phase in ("download", "upload"):
+    if state.phase in ("download", "upload"):
         data.add(
-            timestamp=elapsed,
+            timestamp=state.elapsed_seconds,
             download=state.dl_speed_mbps,
             upload=state.ul_speed_mbps,
         )
-        _prev_elapsed = elapsed
 
     return Panel(
         build_ui(
@@ -415,7 +410,7 @@ def render_live(state: SpeedTestState) -> Panel:
 
 def render_result(result: TestResult, state: SpeedTestState) -> Panel:
     """cli.py 测速完成后调用此函数显示最终结果。"""
-    global _live_data, _prev_elapsed
+    global _live_data
 
     data = _get_live_data()
 
@@ -441,7 +436,6 @@ def render_result(result: TestResult, state: SpeedTestState) -> Panel:
     )
 
     _live_data = None
-    _prev_elapsed = 0.0
 
     return Panel(
         result_ui,

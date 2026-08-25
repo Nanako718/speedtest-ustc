@@ -27,7 +27,7 @@ async def measure_ping(
             if resp.status_code != 200:
                 error_text = resp.text.strip()
                 if "not ustc" in error_text.lower():
-                    raise ConnectionError("测速服务器拒绝访问：仅限中科大网络使用")
+                    raise ConnectionError("请稍后重试")
                 consecutive_errors += 1
                 if consecutive_errors >= 3:
                     raise ConnectionError(f"测速服务器返回错误 (HTTP {resp.status_code})")

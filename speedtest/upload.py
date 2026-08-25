@@ -44,7 +44,7 @@ async def run_upload(
                     error_text = resp.text.strip()
                     if "not ustc" in error_text.lower():
                         raise ConnectionError(
-                            "测速服务器拒绝访问：仅限中科大网络使用"
+                            "请稍后重试"
                         )
                     raise ConnectionError(
                         f"测速服务器返回错误 (HTTP {resp.status_code})"
@@ -68,6 +68,7 @@ async def run_upload(
     start_time = time.monotonic()
     grace_done = False
     measure_start = 0.0
+    grace_uploaded = 0
     bonus_t = 0.0
 
     try:
@@ -86,21 +87,25 @@ async def run_upload(
             if not grace_done and elapsed >= config.UPLOAD_GRACE_TIME:
                 grace_done = True
                 measure_start = now
-                tot_uploaded = 0
+                grace_uploaded = tot_uploaded
                 bonus_t = 0.0
+
+            # 始终更新显示速度（含 grace period）
+            if elapsed > 0.1:
+                speed_bps = tot_uploaded / elapsed
+                speed_mbps = (
+                    speed_bps * 8 * config.OVERHEAD_COMPENSATION / 1_000_000
+                )
+                state.ul_speed_mbps = round(speed_mbps, 2)
+                state.ul_bytes = tot_uploaded
+                state.elapsed_seconds = elapsed
 
             if grace_done:
                 m_elapsed = now - measure_start
                 if m_elapsed > 0.1:
-                    speed_bps = tot_uploaded / m_elapsed
-                    speed_mbps = (
-                        speed_bps * 8 * config.OVERHEAD_COMPENSATION / 1_000_000
-                    )
-                    state.ul_speed_mbps = round(speed_mbps, 2)
-                    state.ul_bytes = tot_uploaded
-                    state.elapsed_seconds = m_elapsed
-
                     if config.AUTO_MODE_ENABLED:
+                        measured = tot_uploaded - grace_uploaded
+                        speed_bps = measured / m_elapsed
                         bonus = min(
                             config.AUTO_BONUS_CAP_MS,
                             5.0 * speed_bps / 100_000,
@@ -120,8 +125,9 @@ async def run_upload(
         await asyncio.gather(*tasks, return_exceptions=True)
 
     m_elapsed = time.monotonic() - measure_start if grace_done else 0.001
+    measured_uploaded = tot_uploaded - grace_uploaded
     final_speed = (
-        tot_uploaded / m_elapsed * 8 * config.OVERHEAD_COMPENSATION / 1_000_000
+        measured_uploaded / m_elapsed * 8 * config.OVERHEAD_COMPENSATION / 1_000_000
     )
     state.ul_speed_mbps = round(final_speed, 2)
     state.ul_bytes = tot_uploaded

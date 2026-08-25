@@ -8,7 +8,6 @@ from rich.live import Live
 
 from speedtest import __version__, config
 from speedtest.engine import run_test
-from speedtest.history import save_result
 from speedtest.models import SpeedTestState
 from speedtest.ui import render_live, render_result
 
@@ -96,8 +95,6 @@ def main() -> int:
         console.print(f"\n  ✗ 测速失败: {e}", style="bold red")
         console.print("  请检查网络连接后重试。", style="dim")
         return 1
-
-    save_result(result.download, result.upload, result.ping, result.jitter)
 
     if use_json:
         output = {

@@ -40,7 +40,7 @@ async def run_download(
                         error_text = body.decode(errors="ignore").strip()
                         if "not ustc" in error_text.lower():
                             raise ConnectionError(
-                                "测速服务器拒绝访问：仅限中科大网络使用"
+                                "请稍后重试"
                             )
                         raise ConnectionError(
                             f"测速服务器返回错误 (HTTP {resp.status_code})"
@@ -66,6 +66,7 @@ async def run_download(
     start_time = time.monotonic()
     grace_done = False
     measure_start = 0.0
+    grace_loaded = 0
     bonus_t = 0.0
 
     try:
@@ -84,21 +85,25 @@ async def run_download(
             if not grace_done and elapsed >= config.DOWNLOAD_GRACE_TIME:
                 grace_done = True
                 measure_start = now
-                tot_loaded = 0
+                grace_loaded = tot_loaded
                 bonus_t = 0.0
+
+            # 始终更新显示速度（含 grace period）
+            if elapsed > 0.1:
+                speed_bps = tot_loaded / elapsed
+                speed_mbps = (
+                    speed_bps * 8 * config.OVERHEAD_COMPENSATION / 1_000_000
+                )
+                state.dl_speed_mbps = round(speed_mbps, 2)
+                state.dl_bytes = tot_loaded
+                state.elapsed_seconds = elapsed
 
             if grace_done:
                 m_elapsed = now - measure_start
                 if m_elapsed > 0.1:
-                    speed_bps = tot_loaded / m_elapsed
-                    speed_mbps = (
-                        speed_bps * 8 * config.OVERHEAD_COMPENSATION / 1_000_000
-                    )
-                    state.dl_speed_mbps = round(speed_mbps, 2)
-                    state.dl_bytes = tot_loaded
-                    state.elapsed_seconds = m_elapsed
-
                     if config.AUTO_MODE_ENABLED:
+                        measured = tot_loaded - grace_loaded
+                        speed_bps = measured / m_elapsed
                         bonus = min(
                             config.AUTO_BONUS_CAP_MS,
                             5.0 * speed_bps / 100_000,
@@ -118,8 +123,9 @@ async def run_download(
         await asyncio.gather(*tasks, return_exceptions=True)
 
     m_elapsed = time.monotonic() - measure_start if grace_done else 0.001
+    measured_loaded = tot_loaded - grace_loaded
     final_speed = (
-        tot_loaded / m_elapsed * 8 * config.OVERHEAD_COMPENSATION / 1_000_000
+        measured_loaded / m_elapsed * 8 * config.OVERHEAD_COMPENSATION / 1_000_000
     )
     state.dl_speed_mbps = round(final_speed, 2)
     state.dl_bytes = tot_loaded
