@@ -7,29 +7,9 @@
 ### Homebrew（macOS 推荐）
 
 ```bash
-brew tap Nanako718/homebrew-speedtest-ustc
+brew tap Nanako718/tap
 brew install speedtest-ustc
 ```
-
-### 下载可执行文件（无需 Python）
-
-从 [Releases](https://github.com/Nanako718/speedtest-ustc/releases/latest) 页面下载对应平台的文件：
-
-| 平台 | 下载文件 |
-|------|----------|
-| macOS (Apple Silicon) | `speedtest-macos-arm64` |
-| macOS (Intel) | `speedtest-macos-amd64` |
-| Linux (x86_64) | `speedtest-linux-amd64` |
-| Windows (x86_64) | `speedtest-windows-amd64.exe` |
-
-macOS / Linux：
-
-```bash
-chmod +x speedtest-macos-arm64
-sudo mv speedtest-macos-arm64 /usr/local/bin/speedtest-ustc
-```
-
-Windows：重命名为 `speedtest-ustc.exe`，放到 PATH 目录。
 
 ### pip 安装（需要 Python 3.10+）
 
