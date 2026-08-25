@@ -19,18 +19,51 @@ jobs:
         run: |
           TAG="${{ github.event.release.tag_name }}"
           VERSION="${TAG#v}"
-          TARBALL_URL="https://github.com/Nanako718/speedtest-ustc/archive/refs/tags/${TAG}.tar.gz"
-          SHA256=$(curl -sL "$TARBALL_URL" | sha256sum | awk '{print $1}')
+          BASE_URL="https://github.com/Nanako718/speedtest-ustc/releases/download/${TAG}"
+
+          ARM64_SHA=$(curl -sL "${BASE_URL}/speedtest-ustc-macos-arm64" | sha256sum | awk '{print $1}')
+          AMD64_SHA=$(curl -sL "${BASE_URL}/speedtest-ustc-macos-amd64" | sha256sum | awk '{print $1}')
+
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "tarball_url=$TARBALL_URL" >> "$GITHUB_OUTPUT"
-          echo "sha256=$SHA256" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "arm64_sha=$ARM64_SHA" >> "$GITHUB_OUTPUT"
+          echo "amd64_sha=$AMD64_SHA" >> "$GITHUB_OUTPUT"
 
       - name: Update Formula
         run: |
-          sed -i "s|url \".*\"|url \"${{ steps.release.outputs.tarball_url }}\"|" \
-            homebrew-tap/Formula/speedtest-ustc.rb
-          sed -i "s|sha256 \".*\"|sha256 \"${{ steps.release.outputs.sha256 }}\"|" \
-            homebrew-tap/Formula/speedtest-ustc.rb
+          TAG="${{ steps.release.outputs.tag }}"
+          VERSION="${{ steps.release.outputs.version }}"
+          BASE_URL="https://github.com/Nanako718/speedtest-ustc/releases/download/${TAG}"
+          ARM64_SHA="${{ steps.release.outputs.arm64_sha }}"
+          AMD64_SHA="${{ steps.release.outputs.amd64_sha }}"
+
+          cat > homebrew-tap/Formula/speedtest-ustc.rb <<RUBY
+          class SpeedtestUstc < Formula
+            desc "USTC network speed test CLI"
+            homepage "https://github.com/Nanako718/speedtest-ustc"
+            version "${VERSION}"
+            license "MIT"
+
+            on_arm do
+              url "${BASE_URL}/speedtest-ustc-macos-arm64"
+              sha256 "${ARM64_SHA}"
+            end
+
+            on_intel do
+              url "${BASE_URL}/speedtest-ustc-macos-amd64"
+              sha256 "${AMD64_SHA}"
+            end
+
+            def install
+              bin.install "speedtest-ustc-macos-arm64" => "speedtest-ustc" if Hardware::CPU.arm?
+              bin.install "speedtest-ustc-macos-amd64" => "speedtest-ustc" if Hardware::CPU.intel?
+            end
+
+            test do
+              assert_match version.to_s, shell_output("#{bin}/speedtest-ustc --version")
+            end
+          end
+          RUBY
 
       - name: Commit and push
         run: |
